@@ -63,6 +63,19 @@ export class HackTarget extends Server {
         const ramGrow = threads.growThreads * this.scriptRamGrow;
         return ramHack + ramWeaken + ramGrow;
     }
+    get moneyYield() {
+        if(this._ns.fileExists("Formulas.exe")){
+            const player = this._ns.getPlayer();
+            const server = this._ns.getServer(this.servername);
+            server.hackDifficulty = server.minDifficulty;
+            return this.maxMoney * ns.formulas.hacking.hackChange(server, player);
+        }
+        else {
+            // maxMoney * 1 if hackingLevel >= 3*requiredHackLevel, otherwise fall off to estimate reduced hackChance
+            // No idea how accurate this is, but beginner guide said 3*requiredHackLevel is a good rule of thumb
+            return this.maxMoney * Math.min(1, (1.33 - this.requiredHackLevel / this._ns.getHackingLevel()));
+        }
+    }
 
     constructor(ns, servername) {
         super(ns, servername);
@@ -117,8 +130,8 @@ export class HackTarget extends Server {
     static getHackableSorted(ns, take) {
         const playerHackingLevel = ns.getHackingLevel();
         return HackTarget.getAll(ns)
-            .filter(target => target.requiredHackLevel <= Math.ceil(playerHackingLevel / 3))
-            .sort((a, b) => b.maxMoney - a.maxMoney)
+            .filter(target => target.requiredHackLevel <= playerHackingLevel)
+            .sort((a, b) => b.moneyYield - a.moneyYield)
             .slice(0, take);
     }
 }
