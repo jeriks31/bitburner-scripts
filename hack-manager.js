@@ -1,10 +1,23 @@
 import {HackHost, HackTarget} from "./server";
 
-export function main(ns) {
-    const resolveOffset = 500; // Time (ms) between resolution of HWGW scripts (e.g. 500 => first weaken finishes 500ms after hack)
-    const maxBatches = 40;
-    const verbose = true; // Set to true to enable extra logging for debugging
-    let maxTargets = 1;
+// Globals
+const resolveOffset = 500; // Time (ms) between resolution of HWGW scripts (e.g. 500 => first weaken finishes 500ms after hack)
+const maxBatches = 40; // Maximum number of batches to schedule per target. Increasing this will increase risk of desync/misfires and use more RAM
+const verbose = true; // Set to true to enable extra logging for debugging
+const mainLoopDelay = 5000; // Time (ms) between main loop iterations
+let maxTargets = 1;
+
+export async function main(ns) {
+    if (!validationCheck(ns)) return;
+
+    while (true) {
+        tryScheduleHackBatches();
+
+        await ns.sleep(mainLoopDelay);
+    }
+}
+
+function tryScheduleHackBatches(){
     let hackHosts = HackHost.getAll(ns);
     let hackTargets = HackTarget.getHackableSorted(ns, maxTargets);
 
@@ -58,4 +71,17 @@ export function main(ns) {
         }
         target.scheduledUntil = Date.now() + (batchCount * resolveOffset * 4);
     }
+}
+
+function validationCheck(ns){
+    if (ns.getServerName() !== "home"){
+        ns.tprint("This script should be run from the home server");
+        return false;
+    }
+    const scriptName = ns.getScriptName();
+    if (ns.scriptRunning(scriptName, "home")){
+        ns.tprint(`${scriptName} is already running on home`);
+        return false;
+    }
+    return true;
 }
