@@ -1,3 +1,41 @@
+class Server {
+    _ns;
+
+    // Permanent properties
+    servername;
+    requiredPorts;
+
+    // Dynamic properties
+    get hasRootAccess() { return this._ns.hasRootAccess(this.servername); }
+
+    constructor(ns, servername) {
+        this._ns = ns;
+        this.servername = servername;
+        this.requiredPorts = ns.getServerNumPortsRequired(servername);
+    }
+
+    crack() {
+        const cracks = {
+            "SQLInject.exe": this._ns.sqlinject,
+            "HTTPWorm.exe": this._ns.httpworm,
+            "relaySMTP.exe": this._ns.relaysmtp,
+            "FTPCrack.exe": this._ns.ftpcrack,
+            "BruteSSH.exe": this._ns.brutessh
+        };
+        for (const [tool, func] of Object.entries(cracks)) {
+            if (this._ns.fileExists(tool)) {
+                func(server);
+            }
+        }
+        try {
+            this._ns.nuke(server);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+}
+
 export class HackTarget extends Server {
     // Permanent properties
     requiredHackLevel;
@@ -37,8 +75,8 @@ export class HackTarget extends Server {
         const moneyStealFactor = 0.5; //TODO: Optimize this
         const hackThreads = Math.floor(this._ns.hackAnalyzeThreads(this.servername, money * moneyStealFactor));
         const growThreads = Math.ceil(this._ns.growthAnalyze(this.servername, 1/(1-moneyStealFactor)));
-        const weaken1Threads = Math.ceil(this._ns.hackAnalyzeSecurity(hackThreads) / ns.weakenAnalyze(1));
-        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / ns.weakenAnalyze(1));
+        const weaken1Threads = Math.ceil(this._ns.hackAnalyzeSecurity(hackThreads) / this._ns.weakenAnalyze(1));
+        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / this._ns.weakenAnalyze(1));
 
         return { hackThreads, weaken1Threads, growThreads, weaken2Threads };
     }
@@ -50,17 +88,17 @@ export class HackTarget extends Server {
         const delayGrow = longestToolTime - this.growTime + resolveOffset * 2;
         const delayWeaken2 = longestToolTime - this.weakenTime + resolveOffset * 3;
 
-        return { delayHack, delayWeaken1, delayGrow, delayWeaken2, maxBatches };
+        return { delayHack, delayWeaken1, delayGrow, delayWeaken2 };
     }
 
     calculatePrep() {
         //Calculate number of threads to reduce security to minimum
-        const weaken1Threads = Math.ceil((this.securityLevel-this.minSecurity) / ns.weakenAnalyze(1));
+        const weaken1Threads = Math.ceil((this.securityLevel-this.minSecurity) / this._ns.weakenAnalyze(1));
         //Calculate number of threads to grow money to maximum
         const moneyPercentage = this.money / this.maxMoney;
         const growThreads = Math.ceil(this._ns.growthAnalyze(this.servername, 1/moneyPercentage));
         //Calculate number of threads to reduce security to minimum again
-        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / ns.weakenAnalyze(1));
+        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / this._ns.weakenAnalyze(1));
         const ramRequired = (weaken1Threads + weaken2Threads) * this.scriptRamWeaken + growThreads * this.scriptRamGrow;
         return {weaken1Threads, growThreads, weaken2Threads, ramRequired};
     }
@@ -100,44 +138,6 @@ export class HackHost extends Server {
 
     static getAll(ns) {
         return getNetworkNodes(ns).map(servername => new HackHost(ns, servername));
-    }
-}
-
-class Server {
-    _ns;
-
-    // Permanent properties
-    servername;
-    requiredPorts;
-
-    // Dynamic properties
-    get hasRootAccess() { return this._ns.hasRootAccess(this.servername); }
-
-    constructor(ns, servername) {
-        this._ns = ns;
-        this.servername = servername;
-        this.requiredPorts = ns.getServerNumPortsRequired(servername);
-    }
-
-    crack() {
-        const cracks = {
-            "SQLInject.exe": ns.sqlinject,
-            "HTTPWorm.exe": ns.httpworm,
-            "relaySMTP.exe": ns.relaysmtp,
-            "FTPCrack.exe": ns.ftpcrack,
-            "BruteSSH.exe": ns.brutessh
-        };
-        for (const [tool, func] of Object.entries(cracks)) {
-            if (this._ns.fileExists(tool)) {
-                func(server);
-            }
-        }
-        try {
-            this._ns.nuke(server);
-            return true;
-        } catch (e) {
-            return false;
-        }
     }
 }
 

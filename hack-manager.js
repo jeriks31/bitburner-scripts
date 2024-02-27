@@ -11,13 +11,13 @@ export async function main(ns) {
     if (!validationCheck(ns)) return;
 
     while (true) {
-        tryScheduleHackBatches();
+        tryScheduleHackBatches(ns);
 
         await ns.sleep(mainLoopDelay);
     }
 }
 
-function tryScheduleHackBatches(){
+function tryScheduleHackBatches(ns){
     let hackHosts = HackHost.getAll(ns);
     let hackTargets = HackTarget.getHackableSorted(ns, maxTargets);
 
@@ -44,7 +44,7 @@ function tryScheduleHackBatches(){
             else{
                 ns.tprint(`Failed to prepare ${target.servername}, no available hosts`);
             }
-            continue;
+            continue; // Go to next target while preparing this one
         }
 
         const threads = target.calculateThreads();
@@ -73,13 +73,15 @@ function tryScheduleHackBatches(){
     }
 }
 
+/** @param {NS} ns */
 function validationCheck(ns){
-    if (ns.getServerName() !== "home"){
+    if (ns.getHostname() !== "home"){
         ns.tprint("This script should be run from the home server");
         return false;
     }
+    const processes = ns.ps();
     const scriptName = ns.getScriptName();
-    if (ns.scriptRunning(scriptName, "home")){
+    if (processes.filter(p => p.filename == scriptName).length > 1 ){
         ns.tprint(`${scriptName} is already running on home`);
         return false;
     }
