@@ -1,5 +1,8 @@
 import {HackHost, HackTarget} from "./server";
 
+/** @type import(".").NS */
+let ns = null;
+
 // Globals
 const resolveOffset = 500; // Time (ms) between resolution of HWGW scripts (e.g. 500 => first weaken finishes 500ms after hack)
 const maxBatches = 40; // Maximum number of batches to schedule per target. Increasing this will increase risk of desync/misfires and use more RAM
@@ -9,20 +12,21 @@ let maxTargets = 1;
 let hackHosts = [];
 let hackTargets = [];
 
-export async function main(ns) {
-    if (!validationCheck(ns)) return;
+export async function main(_ns) {
+    ns = _ns;
+    if (!validationCheck()) return;
 
     hackHosts = HackHost.getAll(ns);
     hackTargets = HackTarget.getHackableSorted(ns, maxTargets); //TODO: this will need to be updated at some point without losing the current object instances
 
     while (true) {
-        await tryScheduleHackBatches(ns);
+        await tryScheduleHackBatches();
 
         await ns.sleep(mainLoopDelay);
     }
 }
 
-async function tryScheduleHackBatches(ns){
+async function tryScheduleHackBatches(){
 
     for (const target of hackTargets) {
         if (Date.now() < target.scheduledUntil){
@@ -98,8 +102,7 @@ async function tryScheduleHackBatches(ns){
     }
 }
 
-/** @param {NS} ns */
-function validationCheck(ns){
+function validationCheck(){
     if (ns.getHostname() !== "home"){
         ns.tprint("This script should be run from the home server");
         return false;

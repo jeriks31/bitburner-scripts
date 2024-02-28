@@ -1,36 +1,37 @@
 const securityDecreasePerWeaken = 0.05; // Saves a call to ns.weakenAnalyze()
 
 class Server {
-    _ns;
+    /** @type import(".").NS */
+    ns;
 
     // Permanent properties
     servername;
     requiredPorts;
 
     // Dynamic properties
-    get hasRootAccess() { return this._ns.hasRootAccess(this.servername); }
+    get hasRootAccess() { return this.ns.hasRootAccess(this.servername); }
 
-    constructor(ns, servername) {
-        this._ns = ns;
+    constructor(_ns, servername) {
+        this.ns = _ns;
         this.servername = servername;
         this.requiredPorts = ns.getServerNumPortsRequired(servername);
     }
 
     crack() {
         const cracks = {
-            "SQLInject.exe": this._ns.sqlinject,
-            "HTTPWorm.exe": this._ns.httpworm,
-            "relaySMTP.exe": this._ns.relaysmtp,
-            "FTPCrack.exe": this._ns.ftpcrack,
-            "BruteSSH.exe": this._ns.brutessh
+            "SQLInject.exe": this.ns.sqlinject,
+            "HTTPWorm.exe": this.ns.httpworm,
+            "relaySMTP.exe": this.ns.relaysmtp,
+            "FTPCrack.exe": this.ns.ftpcrack,
+            "BruteSSH.exe": this.ns.brutessh
         };
         for (const [tool, func] of Object.entries(cracks)) {
-            if (this._ns.fileExists(tool)) {
+            if (this.ns.fileExists(tool)) {
                 func(server);
             }
         }
         try {
-            this._ns.nuke(server);
+            this.ns.nuke(server);
             return true;
         } catch (e) {
             return false;
@@ -51,14 +52,14 @@ export class HackTarget extends Server {
 
 
     // Dynamic properties
-    get money() { return this._ns.getServerMoneyAvailable(this.servername); }
-    get securityLevel() { return this._ns.getServerSecurityLevel(this.servername); }
+    get money() { return this.ns.getServerMoneyAvailable(this.servername); }
+    get securityLevel() { return this.ns.getServerSecurityLevel(this.servername); }
     get isMinSecurity() { return this.securityLevel === this.minSecurity; }
     get isMaxMoney() { return this.money === this.maxMoney; }
     get isPrepared() { return this.isMinSecurity && this.isMaxMoney; }
-    get growTime() { return this._ns.getGrowTime(this.servername); }
-    get hackTime() { return this._ns.getHackTime(this.servername); }
-    get weakenTime() { return this._ns.getWeakenTime(this.servername); }
+    get growTime() { return this.ns.getGrowTime(this.servername); }
+    get hackTime() { return this.ns.getHackTime(this.servername); }
+    get weakenTime() { return this.ns.getWeakenTime(this.servername); }
     get ramPerBatch() {
         const threads = this.calculateThreads();
         const ramHack = threads.hackThreads * this.scriptRamHack;
@@ -67,16 +68,16 @@ export class HackTarget extends Server {
         return ramHack + ramWeaken + ramGrow;
     }
     get moneyYield() {
-        if(this._ns.fileExists("Formulas.exe")){
-            const player = this._ns.getPlayer();
-            const server = this._ns.getServer(this.servername);
+        if(this.ns.fileExists("Formulas.exe")){
+            const player = this.ns.getPlayer();
+            const server = this.ns.getServer(this.servername);
             server.hackDifficulty = server.minDifficulty;
             return this.maxMoney * ns.formulas.hacking.hackChange(server, player);
         }
         else {
             // maxMoney * 1 if hackingLevel >= 3*requiredHackLevel, otherwise fall off to estimate reduced hackChance
             // No idea how accurate this is, but beginner guide said 3*requiredHackLevel is a good rule of thumb
-            return this.maxMoney * Math.min(1, (1.33 - this.requiredHackLevel / this._ns.getHackingLevel()));
+            return this.maxMoney * Math.min(1, (1.33 - this.requiredHackLevel / this.ns.getHackingLevel()));
         }
     }
     get isPrepping() { return this.preppingUntil > Date.now(); }
@@ -91,14 +92,14 @@ export class HackTarget extends Server {
 
     calculateThreads() {
         if (!this.isPrepared) {
-            this._ns.tprint(`Server ${this.servername} is not prepared, cannot calculate threads`);
+            this.ns.tprint(`Server ${this.servername} is not prepared, cannot calculate threads`);
             return null;
         }
         const moneyStealFactor = 0.5; //TODO: Optimize this
-        const hackThreads = Math.floor(this._ns.hackAnalyzeThreads(this.servername, this.maxMoney * moneyStealFactor));
-        const growThreads = Math.ceil(this._ns.growthAnalyze(this.servername, 1/(1-moneyStealFactor)));
-        const weaken1Threads = Math.ceil(this._ns.hackAnalyzeSecurity(hackThreads) / securityDecreasePerWeaken);
-        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / securityDecreasePerWeaken);
+        const hackThreads = Math.floor(this.ns.hackAnalyzeThreads(this.servername, this.maxMoney * moneyStealFactor));
+        const growThreads = Math.ceil(this.ns.growthAnalyze(this.servername, 1/(1-moneyStealFactor)));
+        const weaken1Threads = Math.ceil(this.ns.hackAnalyzeSecurity(hackThreads) / securityDecreasePerWeaken);
+        const weaken2Threads = Math.ceil(this.ns.growthAnalyzeSecurity(growThreads) / securityDecreasePerWeaken);
 
         return { hackThreads, weaken1Threads, growThreads, weaken2Threads };
     }
@@ -118,9 +119,9 @@ export class HackTarget extends Server {
         const weaken1Threads = Math.ceil((this.securityLevel-this.minSecurity) / securityDecreasePerWeaken);
         //Calculate number of threads to grow money to maximum
         const moneyPercentage = this.money / this.maxMoney;
-        const growThreads = Math.ceil(this._ns.growthAnalyze(this.servername, 1/moneyPercentage));
+        const growThreads = Math.ceil(this.ns.growthAnalyze(this.servername, 1/moneyPercentage));
         //Calculate number of threads to reduce security to minimum again
-        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / securityDecreasePerWeaken);
+        const weaken2Threads = Math.ceil(this.ns.growthAnalyzeSecurity(growThreads) / securityDecreasePerWeaken);
         const ramRequired = (weaken1Threads + weaken2Threads) * this.scriptRamWeaken + growThreads * this.scriptRamGrow;
         return {weaken1Threads, growThreads, weaken2Threads, ramRequired};
     }
@@ -138,12 +139,12 @@ export class HackTarget extends Server {
 
         //Calculate number of threads to grow money to maximum
         const moneyPercentage = this.money / this.maxMoney;
-        let gThreads = Math.ceil(this._ns.growthAnalyze(this.servername, 1/moneyPercentage)); //TODO: Use Formulas.exe to optimize this for minSecurity
+        let gThreads = Math.ceil(this.ns.growthAnalyze(this.servername, 1/moneyPercentage)); //TODO: Use Formulas.exe to optimize this for minSecurity
         const growThreadsPerBatch = Math.ceil(gThreads / batches);
 
 
         //Calculate number of threads to reduce security to minimum again
-        const w2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(gThreads) / securityDecreasePerWeaken);
+        const w2Threads = Math.ceil(this.ns.growthAnalyzeSecurity(gThreads) / securityDecreasePerWeaken);
         const w2ThreadsPerBatch = Math.ceil(w2Threads / batches);
 
         const ramPerBatch = (w1ThreadsPerBatch + w2ThreadsPerBatch) * this.scriptRamWeaken + growThreadsPerBatch * this.scriptRamGrow;
@@ -185,7 +186,7 @@ export class HackHost extends Server {
     maxRam;
 
     // Dynamic properties
-    get usedRam() { return this._ns.getServerUsedRam(this.servername); }
+    get usedRam() { return this.ns.getServerUsedRam(this.servername); }
     get freeRam() { return this.maxRam - this.usedRam; }
 
     constructor(ns, servername) {

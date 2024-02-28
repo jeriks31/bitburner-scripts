@@ -1,5 +1,8 @@
-/** @param {NS} ns */
-export async function main(ns) {
+/** @type import(".").NS */
+let ns = null;
+
+export async function main(_ns) {
+    ns = _ns;
     const checkInterval = 5000;
 
     // Purchase servers with 1/4 of the home server's RAM
