@@ -9,7 +9,7 @@ export async function main(ns) {
   if (weakenAmount === 0) {
     ns.tprint(`${args[2]}@${args[0]}: Weakened by 0, must be misfire.`);
   }
-  else if (args[3] === "true") {
+  else if (args[3]) {
     ns.tprint(`${args[2]}@${args[0]}: Weakened by ${weakenAmount}`);
   }
 }

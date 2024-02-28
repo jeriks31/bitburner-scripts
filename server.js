@@ -1,3 +1,5 @@
+const securityDecreasePerWeaken = 0.05; // Saves a call to ns.weakenAnalyze()
+
 class Server {
     _ns;
 
@@ -45,6 +47,7 @@ export class HackTarget extends Server {
     scriptRamWeaken = 1.75;
     scriptRamGrow = 1.75;
     scheduledUntil = 0;
+    preppingUntil = 0;
 
 
     // Dynamic properties
@@ -76,6 +79,8 @@ export class HackTarget extends Server {
             return this.maxMoney * Math.min(1, (1.33 - this.requiredHackLevel / this._ns.getHackingLevel()));
         }
     }
+    get isPrepping() { return this.preppingUntil > Date.now(); }
+    get longestToolTime() { return Math.max(this.weakenTime, this.growTime, this.hackTime); }
 
     constructor(ns, servername) {
         super(ns, servername);
@@ -85,11 +90,15 @@ export class HackTarget extends Server {
     }
 
     calculateThreads() {
+        if (!this.isPrepared) {
+            this._ns.tprint(`Server ${this.servername} is not prepared, cannot calculate threads`);
+            return null;
+        }
         const moneyStealFactor = 0.5; //TODO: Optimize this
-        const hackThreads = Math.floor(this._ns.hackAnalyzeThreads(this.servername, money * moneyStealFactor));
+        const hackThreads = Math.floor(this._ns.hackAnalyzeThreads(this.servername, this.maxMoney * moneyStealFactor));
         const growThreads = Math.ceil(this._ns.growthAnalyze(this.servername, 1/(1-moneyStealFactor)));
-        const weaken1Threads = Math.ceil(this._ns.hackAnalyzeSecurity(hackThreads) / this._ns.weakenAnalyze(1));
-        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / this._ns.weakenAnalyze(1));
+        const weaken1Threads = Math.ceil(this._ns.hackAnalyzeSecurity(hackThreads) / securityDecreasePerWeaken);
+        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / securityDecreasePerWeaken);
 
         return { hackThreads, weaken1Threads, growThreads, weaken2Threads };
     }
@@ -104,16 +113,42 @@ export class HackTarget extends Server {
         return { delayHack, delayWeaken1, delayGrow, delayWeaken2 };
     }
 
-    calculatePrep() {
+    calculatePrepInOneBatch() {
         //Calculate number of threads to reduce security to minimum
-        const weaken1Threads = Math.ceil((this.securityLevel-this.minSecurity) / this._ns.weakenAnalyze(1));
+        const weaken1Threads = Math.ceil((this.securityLevel-this.minSecurity) / securityDecreasePerWeaken);
         //Calculate number of threads to grow money to maximum
         const moneyPercentage = this.money / this.maxMoney;
         const growThreads = Math.ceil(this._ns.growthAnalyze(this.servername, 1/moneyPercentage));
         //Calculate number of threads to reduce security to minimum again
-        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / this._ns.weakenAnalyze(1));
+        const weaken2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(growThreads) / securityDecreasePerWeaken);
         const ramRequired = (weaken1Threads + weaken2Threads) * this.scriptRamWeaken + growThreads * this.scriptRamGrow;
         return {weaken1Threads, growThreads, weaken2Threads, ramRequired};
+    }
+
+    calculatePrepInMaxOneCycle(resolveOffset, maxBatches) {
+        // Calculate thread and batchcount with UP TO batchesPerCycle batches
+        const batches = Math.min(maxBatches, this.batchesPerCycle(resolveOffset));
+
+
+        //Calculate number of threads to reduce security to minimum
+        const securityDiff = this.securityLevel-this.minSecurity;
+        let w1Threads = Math.ceil(securityDiff / securityDecreasePerWeaken);
+        const w1ThreadsPerBatch = Math.ceil(w1Threads / batches);
+
+
+        //Calculate number of threads to grow money to maximum
+        const moneyPercentage = this.money / this.maxMoney;
+        let gThreads = Math.ceil(this._ns.growthAnalyze(this.servername, 1/moneyPercentage)); //TODO: Use Formulas.exe to optimize this for minSecurity
+        const growThreadsPerBatch = Math.ceil(gThreads / batches);
+
+
+        //Calculate number of threads to reduce security to minimum again
+        const w2Threads = Math.ceil(this._ns.growthAnalyzeSecurity(gThreads) / securityDecreasePerWeaken);
+        const w2ThreadsPerBatch = Math.ceil(w2Threads / batches);
+
+        const ramPerBatch = (w1ThreadsPerBatch + w2ThreadsPerBatch) * this.scriptRamWeaken + growThreadsPerBatch * this.scriptRamGrow;
+
+        return {w1ThreadsPerBatch, growThreadsPerBatch, w2ThreadsPerBatch, ramPerBatch, batches};
     }
 
     //One batch is "hack, weaken, grow, weaken".
@@ -121,6 +156,15 @@ export class HackTarget extends Server {
     batchesPerCycle(resolveOffset) {
         const longestToolTime = Math.max(this.weakenTime, this.growTime, this.hackTime);
         return Math.floor(longestToolTime / (resolveOffset * 4));
+    }
+
+    // The amount of ram needed to continuously hack the target with no downtime.
+    ramCostForFullCycle(resolveOffset) {
+        return this.ramPerBatch * this.batchesPerCycle(resolveOffset);
+    }
+
+    optimalMoneyStealFactor(){
+        // calculate maxDollarPerRam using ramCostForFullCycle and maxMoney (or moneyYield?)
     }
 
     static getAll(ns) {

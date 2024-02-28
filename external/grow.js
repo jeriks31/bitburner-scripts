@@ -5,11 +5,11 @@ export async function main(ns) {
   await ns.sleep(args[1]);
   const growMultiplier = await ns.grow(args[0]);
 
-  // Log results
+  // Log results 2 leading spaces to align with weaken.js logs
   if (growMultiplier === 1) {
-    ns.tprint(`${args[2]}@${args[0]}: Grow by x1, must be misfire.`);
+    ns.tprint(`  ${args[2]}@${args[0]}: Grow by x1, must be misfire.`);
   }
-  else if (args[3] === "true") {
-    ns.tprint(`${args[2]}@${args[0]}: Grow by x${ns.formatNumber(growMultiplier)}`);
+  else if (args[3]) {
+    ns.tprint(`  ${args[2]}@${args[0]}: Grow by x${ns.formatNumber(growMultiplier)}`);
   }
 }
