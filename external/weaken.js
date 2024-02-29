@@ -1,9 +1,9 @@
 /** @param {NS} ns */
 export async function main(ns) {
   // Minimal logic to avoid desync
-  const args = ns.args; // [target, delay, processName, verbose]
-  await ns.sleep(args[1]);
-  const weakenAmount = await ns.weaken(args[0]);
+  // args: [target, sleepUntil, processName, verbose]
+  await ns.sleep(ns.args[1] - Date.now());
+  const weakenAmount = await ns.weaken(ns.args[0]);
 
   // Log results
   if (weakenAmount === 0) {

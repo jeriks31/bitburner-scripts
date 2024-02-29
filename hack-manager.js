@@ -5,6 +5,7 @@ let ns = null;
 
 // Globals
 const resolveOffset = 500; // Time (ms) between resolution of HWGW scripts (e.g. 500 => first weaken finishes 500ms after hack)
+const scheduleStartOffset = 1000; // All hack/weak/grow scripts are delayed by this amount in case starting the hack/grow/weak script takes a few ms of time.
 const maxBatches = 40; // Maximum number of batches to schedule per target. Increasing this will increase risk of desync/misfires and use more RAM
 const verbose = true; // Set to true to enable extra logging for debugging
 const mainLoopDelay = 5000; // Time (ms) between main loop iterations
@@ -44,6 +45,7 @@ async function tryScheduleHackBatches(){
             }
             const prep = target.calculatePrepInMaxOneCycle(resolveOffset, maxBatches);
             if (verbose) ns.tprint(`Prep ${target.servername}: ramPerBatch=${prep.ramPerBatch}GB, w1ThreadsPerBatch=${prep.w1ThreadsPerBatch}, growThreadsPerBatch=${prep.growThreadsPerBatch}, w2ThreadsPerBatch=${prep.w2ThreadsPerBatch}`);
+            var scheduleStartTime = Date.now() + scheduleStartOffset;
             while (scheduledBatches < prep.batches){
                 const host = hackHosts.find(host => host.freeRam >= prep.ramPerBatch);
                 if (host) {
@@ -53,12 +55,13 @@ async function tryScheduleHackBatches(){
                     let scheduledForThisHost = 0;
                     while (scheduledForThisHost < toBeScheduledForThisHost){
                         const cycleOffset = scheduledBatches * resolveOffset * 4;
+                        const baseDelay = scheduleStartTime + cycleOffset;
                         if (prep.w1ThreadsPerBatch > 0)
-                            ns.exec("external/weaken.js", host.servername, prep.w1ThreadsPerBatch, target.servername, cycleOffset + delays.delayWeaken1, `Prep-${scheduledBatches}-w1`, verbose);
+                            ns.exec("external/weaken.js", host.servername, prep.w1ThreadsPerBatch, target.servername, baseDelay + delays.delayWeaken1, `Prep-${scheduledBatches}-w1`, verbose);
                         if (prep.growThreadsPerBatch > 0)
-                            ns.exec("external/grow.js", host.servername, prep.growThreadsPerBatch, target.servername, cycleOffset + delays.delayGrow, `Prep-${scheduledBatches}-g2`, verbose);
+                            ns.exec("external/grow.js", host.servername, prep.growThreadsPerBatch, target.servername, baseDelay + delays.delayGrow, `Prep-${scheduledBatches}-g2`, verbose);
                         if (prep.w2ThreadsPerBatch > 0)
-                            ns.exec("external/weaken.js", host.servername, prep.w2ThreadsPerBatch, target.servername, cycleOffset + delays.delayWeaken2, `Prep-${scheduledBatches}-w3`, verbose);
+                            ns.exec("external/weaken.js", host.servername, prep.w2ThreadsPerBatch, target.servername, baseDelay + delays.delayWeaken2, `Prep-${scheduledBatches}-w3`, verbose);
                         scheduledForThisHost++;
                         scheduledBatches++; // Must be incremented here, not in the outer loop, because it is used by cycleOffset and the script names ^^^
                     }
