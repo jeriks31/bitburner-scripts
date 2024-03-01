@@ -7,9 +7,9 @@ export async function main(ns) {
 
   // Log results 2 leading spaces to align with weaken.js logs
   if (growMultiplier === 1) {
-    ns.tprint(`  ${args[2]}@${args[0]}: Grow by x1, must be misfire.`);
+    ns.tprint(`  ${ns.args[2]}@${ns.args[0]}: Grow by x1, must be misfire.`);
   }
-  else if (args[3]) {
-    ns.tprint(`  ${args[2]}@${args[0]}: Grow by x${ns.formatNumber(growMultiplier)}`);
+  else if (ns.args[3]) {
+    ns.tprint(`  ${ns.args[2]}@${ns.args[0]}: Grow by x${ns.formatNumber(growMultiplier)}`);
   }
 }

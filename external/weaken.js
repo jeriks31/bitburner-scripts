@@ -7,9 +7,9 @@ export async function main(ns) {
 
   // Log results
   if (weakenAmount === 0) {
-    ns.tprint(`${args[2]}@${args[0]}: Weakened by 0, must be misfire.`);
+    ns.tprint(`${ns.args[2]}@${ns.args[0]}: Weakened by 0, must be misfire.`);
   }
-  else if (args[3]) {
-    ns.tprint(`${args[2]}@${args[0]}: Weakened by ${weakenAmount}`);
+  else if (ns.args[3]) {
+    ns.tprint(`${ns.args[2]}@${ns.args[0]}: Weakened by ${weakenAmount}`);
   }
 }
