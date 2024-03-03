@@ -11,8 +11,8 @@ class Server {
     // Dynamic properties
     get hasRootAccess() { return this.ns.hasRootAccess(this.servername); }
 
-    constructor(_ns, servername) {
-        this.ns = _ns;
+    constructor(ns, servername) {
+        this.ns = ns;
         this.servername = servername;
         this.requiredPorts = ns.getServerNumPortsRequired(servername);
     }
@@ -57,16 +57,9 @@ export class HackTarget extends Server {
     get isMinSecurity() { return this.securityLevel === this.minSecurity; }
     get isMaxMoney() { return this.money === this.maxMoney; }
     get isPrepared() { return this.isMinSecurity && this.isMaxMoney; }
-    get growTime() { return this.ns.getGrowTime(this.servername); }
-    get hackTime() { return this.ns.getHackTime(this.servername); }
-    get weakenTime() { return this.ns.getWeakenTime(this.servername); }
-    get ramPerBatch() {
-        const threads = this.calculateThreads();
-        const ramHack = threads.hackThreads * this.scriptRamHack;
-        const ramWeaken = (threads.weaken1Threads + threads.weaken2Threads) * this.scriptRamWeaken;
-        const ramGrow = threads.growThreads * this.scriptRamGrow;
-        return ramHack + ramWeaken + ramGrow;
-    }
+    get growTime() { return this.ns.getGrowTime(this.servername); } //todo: formulas.exe
+    get hackTime() { return this.ns.getHackTime(this.servername); } //todo: formulas.exe
+    get weakenTime() { return this.ns.getWeakenTime(this.servername); } //todo: formulas.exe
     get moneyYield() {
         if(this.ns.fileExists("Formulas.exe")){
             const player = this.ns.getPlayer();
@@ -90,18 +83,25 @@ export class HackTarget extends Server {
         this.minSecurity = ns.getServerMinSecurityLevel(servername);
     }
 
-    calculateThreads() {
-        if (!this.isPrepared) {
-            this.ns.tprint(`Server ${this.servername} is not prepared, cannot calculate threads`);
+    calculateThreads(moneyStealFactor=0.5) {
+        const useFormulas = this.ns.fileExists("Formulas.exe");
+        if (!this.isPrepared && !useFormulas) {
+            this.ns.tprint(`Server ${this.servername} is not prepared, cannot calculate threads without Formulas.exe`);
             return null;
         }
-        const moneyStealFactor = 0.5; //TODO: Optimize this
         const hackThreads = Math.floor(this.ns.hackAnalyzeThreads(this.servername, this.maxMoney * moneyStealFactor));
-        const growThreads = Math.ceil(this.ns.growthAnalyze(this.servername, 1/(1-moneyStealFactor)));
+        let growThreads = Math.ceil(this.ns.growthAnalyze(this.servername, 1/(1-moneyStealFactor)));
+        if (useFormulas){
+            const server = this.ns.getServer(this.servername);
+            server.hackDifficulty = server.minDifficulty;
+            growThreads = this.ns.formulas.hacking.growThreads(server, this.ns.getPlayer(), this.maxMoney);
+        }
         const weaken1Threads = Math.ceil(this.ns.hackAnalyzeSecurity(hackThreads) / securityDecreasePerWeaken);
         const weaken2Threads = Math.ceil(this.ns.growthAnalyzeSecurity(growThreads) / securityDecreasePerWeaken);
 
-        return { hackThreads, weaken1Threads, growThreads, weaken2Threads };
+        const ramPerBatch = hackThreads * this.scriptRamHack + growThreads * this.scriptRamGrow + (weaken1Threads+weaken2Threads) * this.scriptRamWeaken;
+
+        return { hackThreads, weaken1Threads, growThreads, weaken2Threads, ramPerBatch };
     }
 
     calculateDelays(resolveOffset) {
@@ -133,23 +133,23 @@ export class HackTarget extends Server {
 
         //Calculate number of threads to reduce security to minimum
         const securityDiff = this.securityLevel-this.minSecurity;
-        let w1Threads = Math.ceil(securityDiff / securityDecreasePerWeaken);
-        const w1ThreadsPerBatch = Math.ceil(w1Threads / batches);
+        let weaken1ThreadsTotal = Math.ceil(securityDiff / securityDecreasePerWeaken);
+        const weaken1Threads = Math.ceil(weaken1ThreadsTotal / batches);
 
 
         //Calculate number of threads to grow money to maximum
         const moneyPercentage = this.money / this.maxMoney;
-        let gThreads = Math.ceil(this.ns.growthAnalyze(this.servername, 1/moneyPercentage)); //TODO: Use Formulas.exe to optimize this for minSecurity
-        const growThreadsPerBatch = Math.ceil(gThreads / batches);
+        let growThreadsTotal = Math.ceil(this.ns.growthAnalyze(this.servername, 1/moneyPercentage)); //TODO: Use Formulas.exe to optimize this for minSecurity
+        const growThreads = Math.ceil(growThreadsTotal / batches);
 
 
         //Calculate number of threads to reduce security to minimum again
-        const w2Threads = Math.ceil(this.ns.growthAnalyzeSecurity(gThreads) / securityDecreasePerWeaken);
-        const w2ThreadsPerBatch = Math.ceil(w2Threads / batches);
+        const weaken2ThreadsTotal = Math.ceil(this.ns.growthAnalyzeSecurity(growThreadsTotal) / securityDecreasePerWeaken);
+        const weaken2Threads = Math.ceil(weaken2ThreadsTotal / batches);
 
-        const ramPerBatch = (w1ThreadsPerBatch + w2ThreadsPerBatch) * this.scriptRamWeaken + growThreadsPerBatch * this.scriptRamGrow;
+        const ramPerBatch = (weaken1Threads + weaken2Threads) * this.scriptRamWeaken + growThreads * this.scriptRamGrow;
 
-        return {w1ThreadsPerBatch, growThreadsPerBatch, w2ThreadsPerBatch, ramPerBatch, batches};
+        return {weaken1Threads, growThreads, weaken2Threads, ramPerBatch, batches};
     }
 
     //One batch is "hack, weaken, grow, weaken".
@@ -169,13 +169,15 @@ export class HackTarget extends Server {
     }
 
     static getAll(ns) {
-        return getNetworkNodes(ns).map(servername => new HackTarget(ns, servername));
+        return getNetworkNodes(ns)
+        .map(servername => new HackTarget(ns, servername))
+        .sort((a, b) => b.maxMoney - a.maxMoney);
     }
 
-    static getHackableSorted(ns, take) {
+    static getHackableSorted(ns, hackTargets, take) {
         const playerHackingLevel = ns.getHackingLevel();
-        return HackTarget.getAll(ns)
-            .filter(target => target.requiredHackLevel <= playerHackingLevel)
+        return hackTargets
+            .filter(target => target.hasRootAccess && target.requiredHackLevel <= playerHackingLevel)
             .sort((a, b) => b.moneyYield - a.moneyYield)
             .slice(0, take);
     }
@@ -195,7 +197,9 @@ export class HackHost extends Server {
     }
 
     static getAll(ns) {
-        return getNetworkNodes(ns).map(servername => new HackHost(ns, servername));
+        return getNetworkNodes(ns)
+            .map(servername => new HackHost(ns, servername))
+            .sort((a, b) => b.maxRam - a.maxRam);
     }
 }
 
